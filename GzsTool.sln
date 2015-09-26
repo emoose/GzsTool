@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{DD8666
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GzsTool.ArchiveBrowser", "GzsTool.ArchiveBrowser\GzsTool.ArchiveBrowser.csproj", "{584A6B70-8512-4E14-9F4A-FDAB5C7D300A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -22,6 +24,10 @@ Global
 		{17481FC5-3DB9-4F0D-949E-B41B99217D0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{17481FC5-3DB9-4F0D-949E-B41B99217D0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{17481FC5-3DB9-4F0D-949E-B41B99217D0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{584A6B70-8512-4E14-9F4A-FDAB5C7D300A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{584A6B70-8512-4E14-9F4A-FDAB5C7D300A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{584A6B70-8512-4E14-9F4A-FDAB5C7D300A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{584A6B70-8512-4E14-9F4A-FDAB5C7D300A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
