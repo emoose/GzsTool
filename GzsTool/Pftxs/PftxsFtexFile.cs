@@ -28,9 +28,8 @@ namespace GzsTool.Pftxs
         [XmlArray("Entries")]
         public List<PftxsFtexsFileEntry> Entries { get; set; }
 
-        public void Read(Stream input)
+        public void Read(X360Reader reader)
         {
-            BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
             long ftexBaseOffset = reader.BaseStream.Position;
             int magicNumber = reader.ReadInt32(); // FTEX
             int size = reader.ReadInt32();
@@ -44,10 +43,10 @@ namespace GzsTool.Pftxs
             for (int i = 0; i < count; i++)
             {
                 PftxsFtexsFileEntry entry = new PftxsFtexsFileEntry();
-                entry.Read(input);
+                entry.Read(reader);
 
                 string name;
-                Hashing.TryGetFileNameFromHash(entry.Hash, out name);
+                Hashing.TryGetFileNameFromHash(entry.Hash, out name, false);
                 entry.FilePath = Hashing.NormalizeFilePath(name);
                 Entries.Add(entry);
             }
@@ -59,10 +58,12 @@ namespace GzsTool.Pftxs
             }
         }
         
-        public void WriteData(BinaryWriter writer, IDirectory inputDirectory)
+        public void WriteData(X360Writer writer, IDirectory inputDirectory)
         {
             long ftexHeaderPosition = writer.BaseStream.Position;
             writer.BaseStream.Position += HeaderSize + Entries.Count * PftxsFtexsFileEntry.HeaderSize;
+
+            bool flipEndian = writer.FlipEndian;
 
             foreach (var entry in Entries)
             {
@@ -74,7 +75,10 @@ namespace GzsTool.Pftxs
             long endPosition = writer.BaseStream.Position;
 
             writer.BaseStream.Position = ftexHeaderPosition;
+            writer.FlipEndian = false;
             writer.Write(Convert.ToUInt32(0x58455446)); // FTEX
+            writer.FlipEndian = flipEndian;
+
             writer.Write(Convert.ToUInt32(endPosition - ftexHeaderPosition)); // Size
             writer.Write(Hash);
             writer.Write(Convert.ToUInt32(Entries.Count));

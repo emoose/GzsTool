@@ -18,7 +18,7 @@ namespace GzsTool.PathId
 
         private void Read(Stream input)
         {
-            BigEndianBinaryReader reader = new BigEndianBinaryReader(input, Encoding.Default, true);
+            X360Reader reader = new X360Reader(input, Encoding.Default, true, true);
             Offset1 = reader.ReadUInt16();
             Offset2 = reader.ReadUInt16();
         }

@@ -9,7 +9,7 @@ namespace GzsTool.Fpk
     {
         public string Value { get; set; }
         public byte[] EncryptedValue { get; set; }
-        public int StringOffset { get; set; }
+        public long StringOffset { get; set; }
         public int StringLength { get; set; }
         public bool ValueResolved { get; set; }
 
@@ -18,25 +18,23 @@ namespace GzsTool.Fpk
             get { return EncryptedValue != null; }
         }
 
-        public static FpkString ReadFpkString(Stream input)
+        public static FpkString ReadFpkString(X360Reader reader)
         {
             FpkString fpkString = new FpkString();
-            fpkString.Read(input);
+            fpkString.Read(reader);
             return fpkString;
         }
 
-        private void Read(Stream input)
+        private void Read(X360Reader reader)
         {
-            BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
-            StringOffset = reader.ReadInt32();
-            reader.Skip(4);
+            StringOffset = reader.ReadInt64();
             StringLength = reader.ReadInt32();
             reader.Skip(4);
 
-            long endPosition = input.Position;
-            input.Position = StringOffset;
+            long endPosition = reader.BaseStream.Position;
+            reader.BaseStream.Position = StringOffset;
             Value = reader.ReadString(StringLength);
-            input.Position = endPosition;
+            reader.BaseStream.Position = endPosition;
         }
 
         public override string ToString()
@@ -64,20 +62,17 @@ namespace GzsTool.Fpk
             ValueResolved = resolved;
         }
 
-        public void WriteString(Stream output)
+        public void WriteString(X360Writer writer)
         {
-            BinaryWriter writer = new BinaryWriter(output, Encoding.Default, true);
-            StringOffset = (int) output.Position;
+            StringOffset = (int) writer.BaseStream.Position;
             string value = ValueEncrypted ? Encoding.Default.GetString(EncryptedValue) : Value;
             StringLength = value.Length;
             writer.WriteNullTerminatedString(value);
         }
 
-        public void Write(Stream output)
+        public void Write(X360Writer writer)
         {
-            BinaryWriter writer = new BinaryWriter(output, Encoding.Default, true);
             writer.Write(StringOffset);
-            writer.WriteZeros(4);
             writer.Write(StringLength);
             writer.WriteZeros(4);
         }

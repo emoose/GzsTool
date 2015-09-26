@@ -17,10 +17,10 @@ namespace GzsTool.Fpk
         }
 
         [XmlIgnore]
-        public uint DataOffset { get; set; }
+        public long DataOffset { get; set; }
 
         [XmlIgnore]
-        public int DataSize { get; set; }
+        public ulong DataSize { get; set; }
 
         [XmlIgnore]
         public FpkString FilePathFpkString { get; set; }
@@ -47,21 +47,18 @@ namespace GzsTool.Fpk
             return FilePathFpkString.ValueResolved == false;
         }
 
-        public static FpkEntry ReadFpkEntry(Stream input)
+        public static FpkEntry ReadFpkEntry(X360Reader reader)
         {
             FpkEntry fpkEntry = new FpkEntry();
-            fpkEntry.Read(input);
+            fpkEntry.Read(reader);
             return fpkEntry;
         }
 
-        private void Read(Stream input)
+        private void Read(X360Reader reader)
         {
-            BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
-            DataOffset = reader.ReadUInt32();
-            reader.Skip(4);
-            DataSize = reader.ReadInt32();
-            reader.Skip(4);
-            FpkString fileName = FpkString.ReadFpkString(input);
+            DataOffset = reader.ReadInt64();
+            DataSize = reader.ReadUInt64();
+            FpkString fileName = FpkString.ReadFpkString(reader);
             Md5Hash = reader.ReadBytes(16);
             fileName.ResolveString(Md5Hash);
             FilePathFpkString = fileName;
@@ -82,7 +79,7 @@ namespace GzsTool.Fpk
         {
             input.Position = DataOffset;
             byte[] result = new byte[DataSize];
-            input.Read(result, 0, DataSize);
+            input.Read(result, 0, (int)DataSize);
             return new MemoryStream(result);
         }
 
@@ -100,30 +97,27 @@ namespace GzsTool.Fpk
             return fileName;
         }
 
-        public void WriteFilePath(Stream output)
+        public void WriteFilePath(X360Writer writer)
         {
             if (Md5Hash == null)
                 Md5Hash = Hashing.Md5HashText(FilePath);
-            FilePathFpkString.WriteString(output);
+            FilePathFpkString.WriteString(writer);
         }
 
-        public void Write(Stream output)
+        public void Write(X360Writer writer)
         {
-            BinaryWriter writer = new BinaryWriter(output, Encoding.Default, true);
             writer.Write(DataOffset);
-            writer.WriteZeros(4);
             writer.Write(DataSize);
-            writer.WriteZeros(4);
-            FilePathFpkString.Write(output);
+            FilePathFpkString.Write(writer);
             writer.Write(Md5Hash);
         }
 
-        public void WriteData(Stream output, IDirectory inputDirectory)
+        public void WriteData(X360Writer writer, IDirectory inputDirectory)
         {
-            DataOffset = (uint) output.Position;
+            DataOffset = (uint) writer.BaseStream.Position;
             byte[] data = inputDirectory.ReadFile(GetFpkEntryFileName());
-            DataSize = data.Length;
-            output.Write(data, 0, data.Length);
+            DataSize = (ulong)data.Length;
+            writer.BaseStream.Write(data, 0, data.Length);
         }
 
         public FileDataStreamContainer Export(Stream input)

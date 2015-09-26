@@ -33,7 +33,7 @@ namespace GzsTool.PathId
 
         public void Read(Stream input)
         {
-            BigEndianBinaryReader reader = new BigEndianBinaryReader(input, Encoding.Default, true);
+            X360Reader reader = new X360Reader(input, Encoding.Default, true, true);
             int unknown1 = reader.ReadInt32();
             int hashCount = reader.ReadInt32();
             int folderCount = reader.ReadInt32();

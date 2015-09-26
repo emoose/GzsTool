@@ -27,7 +27,18 @@ namespace GzsTool
                 string path = args[0];
                 if (File.Exists(path))
                 {
-                    if (path.EndsWith(".dat", StringComparison.CurrentCultureIgnoreCase))
+                    bool isQar = false;
+                    using (var fs = File.OpenRead(path))
+                        isQar = QarFile.GetQarVersion(fs) != 0;
+
+                    if (!isQar && FileIsCryptedSection(path))
+                    {
+                        ReadCryptedSection(path);
+                        return;
+                    }
+                    if (path.EndsWith(".dat", StringComparison.CurrentCultureIgnoreCase) ||
+                        path.EndsWith(".qar", StringComparison.CurrentCultureIgnoreCase) ||
+                        path.EndsWith(".g0s", StringComparison.CurrentCultureIgnoreCase))
                     {
                         ReadQarFile(path);
                         return;
@@ -97,10 +108,33 @@ namespace GzsTool
                               "  GzsTool file_path.fpkd     - Unpacks the fpkd file\n" +
                               "  GzsTool file_path.pftxs    - Unpacks the pftxs file\n" +
                               "  GzsTool folder_path        - Unpacks all fpk and fpkd files in the folder\n" +
+                              "  GzsTool encrypted_file.dat - Decrypts encrypted file (eg console foxfs.dat)\n\n" +
                               "  GzsTool file_path.dat.xml  - Repacks the qar file\n" +
                               "  GzsTool file_path.fpk.xml  - Repacks the fpk file\n" +
                               "  GzsTool file_path.fpkd.xml - Repacks the fpkd file\n" +
                               "  GzsTool file_path.pftxs.xml- Repacks the pftxs file");
+        }
+
+        public static bool FileIsCryptedSection(string filePath)
+        {
+            using (var stream = File.OpenRead(filePath))
+            {
+                using (var reader = new BinaryReader(stream))
+                {
+                    var magic = reader.ReadUInt32();
+                    return magic == 0xE3F8EFE6 || magic == 0xA0F8EFE6;
+                }
+            }
+        }
+
+        public static void ReadCryptedSection(string path)
+        {
+            using (FileStream input = new FileStream(path, FileMode.Open))
+            {
+                var retVal = QarEntry.GetOriginalData(input, 0, 0, (uint)input.Length, 2);
+
+                File.WriteAllBytes(path + ".dec", retVal.Item3.ToArray());
+            }
         }
 
         private static void ReadQarFile(string path)

@@ -5,12 +5,17 @@ using System.Text;
 using System.Xml.Serialization;
 using GzsTool.Common;
 using GzsTool.Common.Interfaces;
+using GzsTool.Utility;
 
 namespace GzsTool.Pftxs
 {
     [XmlType("PftxsFile")]
     public class PftxsFile : ArchiveFile
     {
+        private const int PftxMagicNumber = 0x58544650; // PFTX
+        private const int TexlMagicNumber = 0x4C584554; // TEXL
+        private const int FtexMagicNumber = 0x58455446; // FTEX
+
         private const long FtexHeaderSize = 16;
         private const long TexlHeaderSize = 16;
 
@@ -21,6 +26,9 @@ namespace GzsTool.Pftxs
 
         [XmlAttribute("Name")]
         public string Name { get; set; }
+
+        [XmlAttribute("Endianness")]
+        public string Endianness { get; set; }
 
         [XmlArray("Entries")]
         public List<PftxsFtexFile> Files { get; set; }
@@ -40,11 +48,28 @@ namespace GzsTool.Pftxs
 
         public override void Read(Stream input)
         {
-            BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
+            X360Reader reader = new X360Reader(input, Encoding.Default, true, false);
             int pftxsMagicNumber = reader.ReadInt32(); // PFTXS
-            int unknown1 = reader.ReadInt32();
-            int unknown2 = reader.ReadInt32();
-            int unknown3 = reader.ReadInt32();
+            if (pftxsMagicNumber != PftxMagicNumber)
+                return;
+
+            int unknown1 = reader.ReadInt32(); // 0x40 00 00 00
+            if (unknown1 != 0x40000000)
+            { 
+                if(unknown1 != 0x40)
+                    return;
+                reader.BaseStream.Position -= 4;
+                reader.FlipEndian = true;
+                unknown1 = reader.ReadInt32();
+            }
+            Endianness = reader.FlipEndian ? "Big" : "Little";
+
+            int unknown2 = reader.ReadInt32(); // 0x10
+            if (unknown2 != 0x10)
+                return;
+            int unknown3 = reader.ReadInt32(); // 0x1
+            if (unknown3 != 0x1)
+                return;
 
             int texlistMagicNumber = reader.ReadInt32(); // TEXL
             Size = reader.ReadInt32();
@@ -54,7 +79,7 @@ namespace GzsTool.Pftxs
             for (int i = 0; i < FileCount; i++)
             {
                 PftxsFtexFile pftxsFtexFile = new PftxsFtexFile();
-                pftxsFtexFile.Read(input);
+                pftxsFtexFile.Read(reader);
                 Files.Add(pftxsFtexFile);
             }
         }
@@ -77,7 +102,7 @@ namespace GzsTool.Pftxs
 
         public override void Write(Stream output, IDirectory inputDirectory)
         {
-            BinaryWriter writer = new BinaryWriter(output, Encoding.Default, true);
+            X360Writer writer = new X360Writer(output, Encoding.Default, true, Endianness == "Big");
             long ftexHeaderPosition = output.Position;
             output.Position += FtexHeaderSize;
             long texlHeaderPosition = output.Position;
@@ -89,13 +114,19 @@ namespace GzsTool.Pftxs
 
             long endPosition = output.Position;
             output.Position = ftexHeaderPosition;
-            writer.Write(0x58544650); // PFTX
+            writer.FlipEndian = false;
+            writer.Write(PftxMagicNumber);
+            writer.FlipEndian = Endianness == "Big";
+
             writer.Write(0x40000000);
             writer.Write(0x00000010);
             writer.Write(0x00000001);
 
             output.Position = texlHeaderPosition;
+            writer.FlipEndian = false;
             writer.Write(0x4C584554); // TEXL
+            writer.FlipEndian = Endianness == "Big";
+
             writer.Write(Convert.ToUInt32(endPosition - texlHeaderPosition)); // Size
             writer.Write(Convert.ToUInt32(Files.Count));
             

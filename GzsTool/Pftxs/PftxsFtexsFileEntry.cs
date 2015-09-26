@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Xml.Serialization;
 using GzsTool.Common.Interfaces;
+using GzsTool.Utility;
 
 namespace GzsTool.Pftxs
 {
@@ -27,15 +28,14 @@ namespace GzsTool.Pftxs
         public byte[] Data { get; set; }
 
 
-        public void Read(Stream input)
+        public void Read(X360Reader reader)
         {
-            BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
             Hash = reader.ReadUInt64();
             Offset = reader.ReadInt32();
             Size = reader.ReadInt32();
         }
         
-        public void Write(BinaryWriter writer)
+        public void Write(X360Writer writer)
         {
             writer.Write(Hash);
             writer.Write(Offset);

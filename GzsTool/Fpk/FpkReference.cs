@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Xml.Serialization;
+using GzsTool.Utility;
 
 namespace GzsTool.Fpk
 {
@@ -21,26 +22,26 @@ namespace GzsTool.Fpk
             set { ReferenceFilePath.Value = value; }
         }
 
-        public static FpkReference ReadFpkReference(Stream input)
+        public static FpkReference ReadFpkReference(X360Reader reader)
         {
             FpkReference fpkReference = new FpkReference();
-            fpkReference.Read(input);
+            fpkReference.Read(reader);
             return fpkReference;
         }
 
-        private void Read(Stream input)
+        private void Read(X360Reader reader)
         {
-            ReferenceFilePath = FpkString.ReadFpkString(input);
+            ReferenceFilePath = FpkString.ReadFpkString(reader);
         }
 
-        public void WriteFilePath(Stream output)
+        public void WriteFilePath(X360Writer writer)
         {
-            ReferenceFilePath.WriteString(output);
+            ReferenceFilePath.WriteString(writer);
         }
 
-        public void Write(Stream output)
+        public void Write(X360Writer writer)
         {
-            ReferenceFilePath.Write(output);
+            ReferenceFilePath.Write(writer);
         }
     }
 }

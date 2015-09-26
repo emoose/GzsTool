@@ -12,7 +12,10 @@ namespace GzsTool.Qar
     [XmlType("QarFile")]
     public class QarFile : ArchiveFile
     {
-        private const int QarMagicNumber = 0x52415153;
+        private const int QarMagicNumber = 0x52415153; // SQAR
+
+        [XmlAttribute("QarVersion")]
+        public int QarVersion { get; set; } // 1 = GZ (0x14 byte footer), 2 = TPP consoles (0x24 byte footer), 3 = TPP PC (SQAR header)
 
         [XmlAttribute("Name")]
         public string Name { get; set; }
@@ -30,13 +33,27 @@ namespace GzsTool.Qar
             return qarFile;
         }
 
-        public static bool IsQarFile(Stream input)
+        public static int GetQarVersion(Stream input)
         {
             long startPosition = input.Position;
             BinaryReader reader = new BinaryReader(input, Encoding.ASCII, true);
+            reader.BaseStream.Position = 0;
             int magicNumber = reader.ReadInt32();
+            if(magicNumber == QarMagicNumber)
+            {
+                input.Position = startPosition;
+                return 3;
+            }
+
+            reader.BaseStream.Position = reader.BaseStream.Length - 4;
+            magicNumber = reader.ReadInt32();
             input.Position = startPosition;
-            return magicNumber == QarMagicNumber;
+            if (magicNumber == 0x14)
+                return 1;
+            else if (magicNumber == 0x24)
+                return 2;
+
+            return 0;
         }
 
         public override void Read(Stream input)
@@ -47,9 +64,34 @@ namespace GzsTool.Qar
             const uint xorMask4 = 0x532C7319;
 
             BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
+            uint fileCount = 0;
+            QarVersion = GetQarVersion(input);
+            if (QarVersion == 0)
+                return;
+            if (QarVersion == 1 || QarVersion == 2)
+            {
+                reader.BaseStream.Position = reader.BaseStream.Length - 0x14;
+                fileCount = reader.ReadUInt32();
+                uint magicNumber1 = reader.ReadUInt32();
+                uint entryBlock = reader.ReadUInt32();
+                uint magicNumber2 = reader.ReadUInt32();
+                uint footerSize = reader.ReadUInt32();
+
+                reader.BaseStream.Position = 16 * entryBlock;
+
+                Entries = new List<QarEntry>();
+                for(int i = 0; i < fileCount; i++)
+                {
+                    var entry = new QarEntry();
+                    entry.Read(reader, QarVersion);
+                    Entries.Add(entry);
+                }
+                return;
+            }
+
             uint magicNumber = reader.ReadUInt32(); // SQAR
             Flags = reader.ReadUInt32() ^ xorMask1;
-            uint fileCount = reader.ReadUInt32() ^ xorMask2;
+            fileCount = reader.ReadUInt32() ^ xorMask2;
             uint unknownCount = reader.ReadUInt32() ^ xorMask3;
             uint blockFileEnd = reader.ReadUInt32() ^ xorMask4;
             uint offsetFirstFile = reader.ReadUInt32() ^ xorMask1;
@@ -63,7 +105,7 @@ namespace GzsTool.Qar
             ulong[] sections = DecryptSectionList(fileCount, sectionsData);
             byte[] unknownSectionData = reader.ReadBytes((int)(16 * unknownCount));
 
-            List<QarEntry> entries = new List<QarEntry>();
+            Entries = new List<QarEntry>();
             foreach (var section in sections)
             {
                 ulong sectionBlock = section >> 40;
@@ -73,9 +115,8 @@ namespace GzsTool.Qar
 
                 var entry = new QarEntry();
                 entry.Read(reader);
-                entries.Add(entry);
+                Entries.Add(entry);
             }
-            Entries = entries;
         }
 
         private static ulong[] DecryptSectionList(uint fileCount, byte[] sections)

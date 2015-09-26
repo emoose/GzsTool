@@ -37,6 +37,9 @@ namespace GzsTool.Qar
         [XmlIgnore]
         public long DataOffset { get; set; }
 
+        [XmlIgnore]
+        public int QarVersion { get; set; }
+        
         // TODO: Enable when the hashing is fixed
         ////public bool ShouldSerializeHash()
         ////{
@@ -66,32 +69,48 @@ namespace GzsTool.Qar
             ulong newHash = Hashing.HashFileNameWithExtension(FilePath);
             Debug.Assert(Hash == newHash);
         }
-
-        public void Read(BinaryReader reader)
+        
+        public void Read(BinaryReader reader, int qarVersion = 3)
         {
+            QarVersion = qarVersion;
+
             const uint xorMask1 = 0x41441043;
             const uint xorMask2 = 0x11C22050;
             const uint xorMask3 = 0xD05608C3;
             const uint xorMask4 = 0x532C7319;
-                
-            uint hashLow = reader.ReadUInt32() ^ xorMask1;
-            uint hashHigh = reader.ReadUInt32() ^ xorMask1;
+
+            uint hashLow = reader.ReadUInt32();
+            uint hashHigh = reader.ReadUInt32();
+            
+            if(qarVersion == 3)
+            {
+                hashLow = hashLow ^ xorMask1;
+                hashHigh = hashHigh ^ xorMask1;
+            }
             Hash = (ulong)hashHigh << 32 | hashLow;
-            UncompressedSize = reader.ReadUInt32() ^ xorMask2;
-            CompressedSize = reader.ReadUInt32() ^ xorMask3;
 
-            Compressed = UncompressedSize != CompressedSize;
+            if (qarVersion != 3)
+                DataOffset = reader.ReadUInt32() * 16;
 
-            uint md51 = reader.ReadUInt32() ^ xorMask4;
-            uint md52 = reader.ReadUInt32() ^ xorMask1;
-            uint md53 = reader.ReadUInt32() ^ xorMask1;
-            uint md54 = reader.ReadUInt32() ^ xorMask2;
+            UncompressedSize = reader.ReadUInt32();
+            if (qarVersion == 3)
+            {
+                UncompressedSize = UncompressedSize ^ xorMask2;
+                CompressedSize = reader.ReadUInt32() ^ xorMask3;
+                Compressed = UncompressedSize != CompressedSize;
+
+                uint md51 = reader.ReadUInt32() ^ xorMask4;
+                uint md52 = reader.ReadUInt32() ^ xorMask1;
+                uint md53 = reader.ReadUInt32() ^ xorMask1;
+                uint md54 = reader.ReadUInt32() ^ xorMask2;
+            }
 
             string filePath;
             FileNameFound = TryGetFilePath(out filePath);
             FilePath = filePath;
 
-            DataOffset = reader.BaseStream.Position;
+            if(qarVersion == 3)
+                DataOffset = reader.BaseStream.Position;
         }
         
         public FileDataStreamContainer Export(Stream input)
@@ -115,50 +134,89 @@ namespace GzsTool.Qar
             };
         }
 
-        private Stream ReadData(Stream input)
+        public static Tuple<uint, bool, Stream> GetOriginalData(Stream input, ulong hash, long dataOffset, uint dataSize, int qarVersion = 3)
         {
-            input.Position = DataOffset;
+            input.Position = dataOffset;
             BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
 
-            byte[] sectionData = reader.ReadBytes((int)UncompressedSize);
-            Decrypt1(sectionData, hashLow: (uint) (Hash & 0xFFFFFFFF));
+            int size = (int)dataSize;
+            uint key = 0;
+
+            byte[] sectionData = reader.ReadBytes(size);
+
+            if(qarVersion == 1)
+            {
+                sectionData = Encryption.DeEncryptQar(sectionData, (uint)(dataOffset / 16));
+                const uint keyConstant = 0xA0F8EFE6;
+                uint peekData = BitConverter.ToUInt32(sectionData, 0);
+                if (peekData == keyConstant)
+                {
+                    key = BitConverter.ToUInt32(sectionData, 4);
+                    dataSize -= 8;
+                    byte[] data2 = new byte[sectionData.Length - 8];
+                    Array.Copy(sectionData, 8, data2, 0, sectionData.Length - 8);
+                    sectionData = Encryption.DeEncrypt(data2, key);
+                }
+                return new Tuple<uint, bool, Stream>(key, false, new MemoryStream(sectionData));
+            }
+
+            if (qarVersion == 3)
+                Decrypt1(sectionData, hashLow: (uint)(hash & 0xFFFFFFFF));
+
+            bool compressed = false;
+
             uint magicEntry = BitConverter.ToUInt32(sectionData, 0);
             if (magicEntry == 0xA0F8EFE6)
             {
                 const int headerSize = 8;
-                Key = BitConverter.ToUInt32(sectionData, 4);
-                UncompressedSize -= headerSize;
-                byte[] newSectionData = new byte[UncompressedSize];
-                Array.Copy(sectionData, headerSize, newSectionData, 0, UncompressedSize);
-                Decrypt2(newSectionData, Key);
+                key = BitConverter.ToUInt32(sectionData, 4);
+                size -= headerSize;
+                byte[] newSectionData = new byte[size];
+                Array.Copy(sectionData, headerSize, newSectionData, 0, size);
+                Decrypt2(newSectionData, key);
             }
             else if (magicEntry == 0xE3F8EFE6)
             {
                 const int headerSize = 16;
-                Key = BitConverter.ToUInt32(sectionData, 4);
-                UncompressedSize -= headerSize;
-                byte[] newSectionData = new byte[UncompressedSize];
-                Array.Copy(sectionData, headerSize, newSectionData, 0, UncompressedSize);
-                Decrypt2(newSectionData, Key);
+                key = BitConverter.ToUInt32(sectionData, 4);
+                if (qarVersion != 3)
+                {
+                    uint ucsize = BitConverter.ToUInt32(sectionData, 8);
+                    uint csize = BitConverter.ToUInt32(sectionData, 0xC);
+                    compressed = ucsize != csize;
+                    if (ucsize == 0 || csize == 0)
+                        compressed = false;
+                }
+                size -= headerSize;
+
+                byte[] newSectionData = new byte[size];
+                Array.Copy(sectionData, headerSize, newSectionData, 0, size);
+                Decrypt2(newSectionData, key);
                 sectionData = newSectionData;
             }
 
-            if (Compressed)
-            {
+            if (compressed)
                 sectionData = Compression.Inflate(sectionData);
-            }
 
-            return new MemoryStream(sectionData);
+            return new Tuple<uint, bool, Stream>(key, compressed, new MemoryStream(sectionData));
+        }
+
+        private Stream ReadData(Stream input)
+        {
+            var retVal = GetOriginalData(input, Hash, DataOffset, UncompressedSize, QarVersion);
+            Key = retVal.Item1;
+            Compressed = retVal.Item2;
+            return retVal.Item3;
         }
         
         private bool TryGetFilePath(out string filePath)
         {
-            bool filePathFound = Hashing.TryGetFileNameFromHash(Hash, out filePath);
+            bool filePathFound = Hashing.TryGetFileNameFromHash(Hash, out filePath, QarVersion == 1);
             filePath = Hashing.NormalizeFilePath(filePath);
             return filePathFound;
         }
         
-        private void Decrypt1(byte[] sectionData, uint hashLow)
+        private static void Decrypt1(byte[] sectionData, uint hashLow)
         {
             // TODO: Use a ulong array instead.
             uint[] decryptionTable =
@@ -210,7 +268,7 @@ namespace GzsTool.Qar
             }
         }
 
-        private unsafe void Decrypt2(byte[] input, uint key)
+        private static unsafe void Decrypt2(byte[] input, uint key)
         {
             int size = input.Length;
             uint currentKey = key | ((key ^ 25974) << 16);
