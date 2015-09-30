@@ -75,11 +75,40 @@ namespace GzsTool.Fpk
             };
         }
 
+        private bool DecryptCryptedFile(byte[] fileData, string filePath, out byte[] decryptedData)
+        {
+            var filename = Path.GetFileName(filePath);
+            var hash = Hashing.HashFileNameLegacy(filename, false);
+            var key = BitConverter.GetBytes(~hash);
+
+            var decData = new byte[fileData.Length - 1];
+
+            for (int i = 0; i < fileData.Length - 1; i++)
+            {
+                key[i & 7] ^= fileData[i + 1];
+                decData[i] = key[i & 7];
+            }
+
+            var success = decData[decData.Length - 1] == 0;
+            if (!success)
+            {
+                decryptedData = fileData;
+                return false;
+            }
+
+            Array.Resize(ref decData, decData.Length - 1);
+            decryptedData = decData;
+            return true;
+        }
+
         private Stream ReadData(Stream input)
         {
             input.Position = DataOffset;
             byte[] result = new byte[DataSize];
             input.Read(result, 0, (int)DataSize);
+            if (result[0] == 0x1B || result[0] == 0x1C)
+                DecryptCryptedFile(result, GetFpkEntryFileName(), out result);
+
             return new MemoryStream(result);
         }
 

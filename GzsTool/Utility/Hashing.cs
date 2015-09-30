@@ -279,7 +279,7 @@ namespace GzsTool.Utility
             return HashFileName(fileExtension, false) & 0x1FFF;
         }
 
-        private static ulong HashFileName(string text, bool removeExtension = true)
+        public static ulong HashFileName(string text, bool removeExtension = true)
         {
             if (removeExtension)
             {
@@ -305,7 +305,7 @@ namespace GzsTool.Utility
             return setFlag ? maskedHash | 0x4000000000000 : maskedHash;
         }
 
-        private static ulong HashFileNameLegacy(string text, bool removeExtension = true)
+        public static ulong HashFileNameLegacy(string text, bool removeExtension = true)
         {
             if (removeExtension)
             {
