@@ -77,7 +77,7 @@ namespace GzsTool.Fpk
 
         private bool DecryptCryptedFile(byte[] fileData, string filePath, out byte[] decryptedData)
         {
-            var filename = Path.GetFileName(filePath);
+            var filename = Path.GetFileName(filePath).ToLower();
             var hash = Hashing.HashFileNameLegacy(filename, false);
             var key = BitConverter.GetBytes(~hash);
 
