@@ -134,7 +134,7 @@ namespace GzsTool.Qar
             };
         }
 
-        public static Tuple<uint, bool, Stream> GetOriginalData(Stream input, ulong hash, long dataOffset, uint dataSize, int qarVersion = 3)
+        public static Tuple<uint, bool, Stream> GetOriginalData(Stream input, bool isCompressed, ulong hash, long dataOffset, uint dataSize, int qarVersion = 3)
         {
             input.Position = dataOffset;
             BinaryReader reader = new BinaryReader(input, Encoding.Default, true);
@@ -163,7 +163,7 @@ namespace GzsTool.Qar
             if (qarVersion == 3)
                 Decrypt1(sectionData, hashLow: (uint)(hash & 0xFFFFFFFF));
 
-            bool compressed = false;
+            bool compressed = isCompressed;
 
             uint magicEntry = BitConverter.ToUInt32(sectionData, 0);
             if (magicEntry == 0xA0F8EFE6)
@@ -203,7 +203,7 @@ namespace GzsTool.Qar
 
         private Stream ReadData(Stream input)
         {
-            var retVal = GetOriginalData(input, Hash, DataOffset, UncompressedSize, QarVersion);
+            var retVal = GetOriginalData(input, Compressed, Hash, DataOffset, UncompressedSize, QarVersion);
             Key = retVal.Item1;
             Compressed = retVal.Item2;
             return retVal.Item3;

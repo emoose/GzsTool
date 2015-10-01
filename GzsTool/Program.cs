@@ -131,7 +131,7 @@ namespace GzsTool
         {
             using (FileStream input = new FileStream(path, FileMode.Open))
             {
-                var retVal = QarEntry.GetOriginalData(input, 0, 0, (uint)input.Length, 2);
+                var retVal = QarEntry.GetOriginalData(input, false, 0, 0, (uint)input.Length, 2);
 
                 File.WriteAllBytes(path + ".dec", retVal.Item3.ToArray());
             }

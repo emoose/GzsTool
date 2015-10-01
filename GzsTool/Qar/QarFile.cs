@@ -114,7 +114,7 @@ namespace GzsTool.Qar
                 reader.BaseStream.Position = (long)sectionOffset;
 
                 var entry = new QarEntry();
-                entry.Read(reader);
+                entry.Read(reader, QarVersion);
                 Entries.Add(entry);
             }
         }
